@@ -303,6 +303,61 @@ async def auto_alert():
 
 
 # ======================================================
+#  MORNING BRIEFING — ส่งข่าวทุกเช้า จ-ศ 07:00
+# ======================================================
+@tasks.loop(minutes=1)
+async def morning_briefing():
+    now = datetime.now(TZ_THAI)
+    # จันทร์=0 ศุกร์=4
+    if now.weekday() > 4:
+        return
+    if now.hour != 7 or now.minute != 0:
+        return
+
+    guild = discord.utils.get(bot.guilds)
+    if not guild:
+        return
+    channel = discord.utils.get(guild.text_channels, name=ALERT_CHANNEL_NAME)
+    if not channel:
+        channel = await guild.create_text_channel(ALERT_CHANNEL_NAME)
+
+    all_events = await fetch_calendar()
+    today = datetime.now(TZ_THAI).date()
+    events = [e for e in all_events
+              if parse_event_time(e) and parse_event_time(e).date() == today]
+    events.sort(key=lambda e: parse_event_time(e) or datetime.min.replace(tzinfo=TZ_THAI))
+
+    # ส่ง Calendar ประจำวัน
+    embed = build_event_embed(events,
+                              f"☀️ สรุปข่าววันนี้ — {now.strftime('%A %d/%m/%Y')}",
+                              discord.Color.gold())
+    high_count = sum(1 for e in events if e.get("impact") == "High")
+    med_count  = sum(1 for e in events if e.get("impact") == "Medium")
+    embed.set_footer(text=f"🔴 High: {high_count}  🟡 Medium: {med_count}  |  XAU Calendar Bot • เวลาไทย (UTC+7)")
+    await channel.send("@here 📢 **สรุปข่าวประจำวัน**", embed=embed)
+
+    # ส่ง AI วิเคราะห์
+    high_med = [e for e in events if e.get("impact") in ["High", "Medium"]]
+    if high_med:
+        summary = "
+".join(
+            f"- {e.get('title')} ({e.get('impact')}) "
+            f"คาดการณ์:{e.get('forecast','—')} ก่อนหน้า:{e.get('previous','—')}"
+            for e in high_med
+        )
+        result = await ai_analyze(summary)
+        ai_embed = discord.Embed(
+            title="🤖 AI วิเคราะห์ XAUUSD ประจำวัน",
+            description=result,
+            color=discord.Color.purple(),
+            timestamp=datetime.now(TZ_THAI)
+        )
+        ai_embed.set_footer(text="XAU Calendar Bot • powered by Claude AI")
+        await channel.send(embed=ai_embed)
+    else:
+        await channel.send("✅ วันนี้ไม่มีข่าว High/Medium Impact ครับ — เทรดได้สบายใจ!")
+
+# ======================================================
 #  BOT EVENTS
 # ======================================================
 @bot.event
@@ -311,6 +366,7 @@ async def on_ready():
     await tree.sync()
     print("✅ Slash commands synced!")
     auto_alert.start()
+    morning_briefing.start()
 
 
 bot.run(BOT_TOKEN)
