@@ -103,11 +103,16 @@ async def ai_analyze(event_summary: str) -> str:
         async with aiohttp.ClientSession() as session:
             async with session.post("https://api.anthropic.com/v1/messages",
                                     headers=headers, json=body,
-                                    timeout=aiohttp.ClientTimeout(total=20)) as r:
-                data = await r.json()
-                return data["content"][0]["text"]
+                                    timeout=aiohttp.ClientTimeout(total=25)) as r:
+                data = await r.json(content_type=None)
+                if "content" in data and len(data["content"]) > 0:
+                    return data["content"][0].get("text", "ไม่มีข้อมูลครับ")
+                elif "error" in data:
+                    return f"❌ API Error: {data['error'].get('message', 'unknown')}"
+                else:
+                    return f"❌ Response ไม่ถูกต้อง: {data}"
     except Exception as e:
-        return f"❌ ไม่สามารถวิเคราะห์ได้: {e}"
+        return f"❌ ไม่สามารถเชื่อมต่อได้: {e}"
 
 # ======================================================
 #  SLASH COMMANDS
