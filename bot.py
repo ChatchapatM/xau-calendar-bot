@@ -339,8 +339,7 @@ async def morning_briefing():
     # ส่ง AI วิเคราะห์
     high_med = [e for e in events if e.get("impact") in ["High", "Medium"]]
     if high_med:
-        summary = "
-".join(
+        summary = "\n".join(
             f"- {e.get('title')} ({e.get('impact')}) "
             f"คาดการณ์:{e.get('forecast','—')} ก่อนหน้า:{e.get('previous','—')}"
             for e in high_med
