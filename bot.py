@@ -85,7 +85,7 @@ async def ai_analyze(event_summary: str) -> str:
         "content-type": "application/json",
     }
     body = {
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-5",
         "max_tokens": 400,
         "messages": [{
             "role": "user",
