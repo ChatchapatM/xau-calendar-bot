@@ -225,34 +225,38 @@ alerted_events = set()
 
 @tasks.loop(minutes=5)
 async def auto_alert():
-    guild = discord.utils.get(bot.guilds)
-    if not guild: return
-    channel = discord.utils.get(guild.text_channels, name=ALERT_CHANNEL_NAME)
-    if not channel:
-        channel = await guild.create_text_channel(ALERT_CHANNEL_NAME)
-    all_events = await fetch_calendar()
-    now = datetime.now(TZ_THAI)
-    for e in all_events:
-        if e.get("impact") != "High": continue
-        dt = parse_event_time(e)
-        if not dt: continue
-        mins_left = (dt - now).total_seconds() / 60
-        event_id  = f"{e.get('title')}_{dt.strftime('%Y%m%d%H%M')}"
-        if 25 <= mins_left <= 35 and event_id not in alerted_events:
-            alerted_events.add(event_id)
-            embed = discord.Embed(
-                title="⚠️ High Impact ใน 30 นาที!",
-                description=(
-                    f"**{e.get('title')}**\n"
-                    f"⏰ {dt.strftime('%H:%M')} น. (เวลาไทย)\n"
-                    f"📊 คาดการณ์: `{e.get('forecast','—')}` "
-                    f"| ก่อนหน้า: `{e.get('previous','—')}`\n\n"
-                    f"🚫 **แนะนำหลีกเลี่ยงการเทรด XAUUSD ช่วงนี้**"
-                ),
-                color=discord.Color.red(), timestamp=datetime.now(TZ_THAI)
-            )
-            embed.set_footer(text="XAU Calendar Bot")
-            await channel.send(embed=embed)
+    try:
+        guild = discord.utils.get(bot.guilds)
+        if not guild: return
+        channel = discord.utils.get(guild.text_channels, name=ALERT_CHANNEL_NAME)
+        if not channel:
+            print(f"⚠️ auto_alert: ไม่เจอช่อง #{ALERT_CHANNEL_NAME} (ข้ามรอบนี้)")
+            return
+        all_events = await fetch_calendar()
+        now = datetime.now(TZ_THAI)
+        for e in all_events:
+            if e.get("impact") != "High": continue
+            dt = parse_event_time(e)
+            if not dt: continue
+            mins_left = (dt - now).total_seconds() / 60
+            event_id  = f"{e.get('title')}_{dt.strftime('%Y%m%d%H%M')}"
+            if 25 <= mins_left <= 35 and event_id not in alerted_events:
+                alerted_events.add(event_id)
+                embed = discord.Embed(
+                    title="⚠️ High Impact ใน 30 นาที!",
+                    description=(
+                        f"**{e.get('title')}**\n"
+                        f"⏰ {dt.strftime('%H:%M')} น. (เวลาไทย)\n"
+                        f"📊 คาดการณ์: `{e.get('forecast','—')}` "
+                        f"| ก่อนหน้า: `{e.get('previous','—')}`\n\n"
+                        f"🚫 **แนะนำหลีกเลี่ยงการเทรด XAUUSD ช่วงนี้**"
+                    ),
+                    color=discord.Color.red(), timestamp=datetime.now(TZ_THAI)
+                )
+                embed.set_footer(text="XAU Calendar Bot")
+                await channel.send(embed=embed)
+    except Exception as e:
+        print(f"❌ auto_alert error (ไม่กระทบ task อื่น): {e}")
 
 
 # ======================================================
@@ -264,55 +268,67 @@ async def morning_briefing():
     if now.weekday() > 4: return                          # เสาร์-อาทิตย์ข้าม
     if now.hour != MORNING_HOUR or now.minute != 0: return
 
-    guild = discord.utils.get(bot.guilds)
-    if not guild: return
-    channel = discord.utils.get(guild.text_channels, name=MORNING_CHANNEL_NAME)
-    if not channel:
-        # ถ้าไม่เจอ fallback ไปหา trading-alerts
-        channel = discord.utils.get(guild.text_channels, name=ALERT_CHANNEL_NAME)
-    if not channel: return
+    try:
+        guild = discord.utils.get(bot.guilds)
+        if not guild: return
+        channel = discord.utils.get(guild.text_channels, name=MORNING_CHANNEL_NAME)
+        if not channel:
+            channel = discord.utils.get(guild.text_channels, name=ALERT_CHANNEL_NAME)
+        if not channel:
+            print(f"⚠️ morning_briefing: ไม่เจอช่อง #{MORNING_CHANNEL_NAME} หรือ #{ALERT_CHANNEL_NAME}")
+            return
 
-    all_events = await fetch_calendar()
-    today  = datetime.now(TZ_THAI).date()
-    events = sorted(
-        [e for e in all_events if parse_event_time(e) and parse_event_time(e).date() == today],
-        key=lambda e: parse_event_time(e) or datetime.min.replace(tzinfo=TZ_THAI)
-    )
-
-    # ส่ง Calendar
-    high_count = sum(1 for e in events if e.get("impact") == "High")
-    med_count  = sum(1 for e in events if e.get("impact") == "Medium")
-    embed = build_event_embed(
-        events,
-        f"☀️ สรุปข่าววันนี้ — {now.strftime('%A %d/%m/%Y')}",
-        discord.Color.gold()
-    )
-    embed.set_footer(
-        text=f"🔴 High: {high_count}  🟡 Medium: {med_count}  |  XAU Calendar Bot • 08:00 UTC+7"
-    )
-    await channel.send("📢 **สรุปข่าวประจำวัน**", embed=embed)
-
-    # ส่ง AI วิเคราะห์
-    high_med = [e for e in events if e.get("impact") in ["High", "Medium"]]
-    if high_med:
-        summary = "\n".join(
-            f"- {e.get('title')} ({e.get('impact')}) "
-            f"คาดการณ์:{e.get('forecast','—')} ก่อนหน้า:{e.get('previous','—')}"
-            for e in high_med
+        all_events = await fetch_calendar()
+        today  = datetime.now(TZ_THAI).date()
+        events = sorted(
+            [e for e in all_events if parse_event_time(e) and parse_event_time(e).date() == today],
+            key=lambda e: parse_event_time(e) or datetime.min.replace(tzinfo=TZ_THAI)
         )
-        result = await ai_analyze(summary)
-        ai_embed = discord.Embed(
-            title="🤖 AI วิเคราะห์ XAUUSD ประจำวัน",
-            description=result,
-            color=discord.Color.purple(),
-            timestamp=datetime.now(TZ_THAI)
-        )
-        ai_embed.set_footer(text="XAU Calendar Bot • powered by Claude AI")
-        await channel.send(embed=ai_embed)
-    else:
-        await channel.send("✅ วันนี้ไม่มีข่าว High/Medium Impact ครับ — เทรดได้สบายใจ!")
 
-    print(f"✅ morning briefing → #{MORNING_CHANNEL_NAME}: {now.strftime('%d/%m/%Y %H:%M')}")
+        # ส่ง Calendar
+        high_count = sum(1 for e in events if e.get("impact") == "High")
+        med_count  = sum(1 for e in events if e.get("impact") == "Medium")
+        embed = build_event_embed(
+            events,
+            f"☀️ สรุปข่าววันนี้ — {now.strftime('%A %d/%m/%Y')}",
+            discord.Color.gold()
+        )
+        embed.set_footer(
+            text=f"🔴 High: {high_count}  🟡 Medium: {med_count}  |  XAU Calendar Bot • 08:00 UTC+7"
+        )
+        await channel.send("📢 **สรุปข่าวประจำวัน**", embed=embed)
+
+        # ส่ง AI วิเคราะห์
+        high_med = [e for e in events if e.get("impact") in ["High", "Medium"]]
+        if high_med:
+            summary = "\n".join(
+                f"- {e.get('title')} ({e.get('impact')}) "
+                f"คาดการณ์:{e.get('forecast','—')} ก่อนหน้า:{e.get('previous','—')}"
+                for e in high_med
+            )
+            result = await ai_analyze(summary)
+            ai_embed = discord.Embed(
+                title="🤖 AI วิเคราะห์ XAUUSD ประจำวัน",
+                description=result,
+                color=discord.Color.purple(),
+                timestamp=datetime.now(TZ_THAI)
+            )
+            ai_embed.set_footer(text="XAU Calendar Bot • powered by Claude AI")
+            await channel.send(embed=ai_embed)
+        else:
+            await channel.send("✅ วันนี้ไม่มีข่าว High/Medium Impact ครับ — เทรดได้สบายใจ!")
+
+        print(f"✅ morning briefing → #{MORNING_CHANNEL_NAME}: {now.strftime('%d/%m/%Y %H:%M')}")
+
+    except Exception as e:
+        print(f"❌ morning_briefing error (ไม่กระทบ task อื่น): {e}")
+        try:
+            guild = discord.utils.get(bot.guilds)
+            channel = discord.utils.get(guild.text_channels, name=MORNING_CHANNEL_NAME) if guild else None
+            if channel:
+                await channel.send(f"⚠️ Morning briefing เกิดข้อผิดพลาด: {e}")
+        except Exception:
+            pass
 
 
 # ======================================================
@@ -325,10 +341,62 @@ async def on_ready():
     print("✅ Slash commands synced!")
     auto_alert.start()
     morning_briefing.start()
+
     now   = datetime.now(TZ_THAI)
     next8 = now.replace(hour=MORNING_HOUR, minute=0, second=0, microsecond=0)
     if now >= next8: next8 += timedelta(days=1)
     print(f"🌅 Morning briefing → #{MORNING_CHANNEL_NAME} ใน {round((next8-now).total_seconds()/3600,1)} ชม.")
+
+    # ── Catch-up: ถ้า bot restart หลัง 08:00 ของวันนี้ (วันธรรมดา) และยังไม่ได้ส่ง ──
+    if now.weekday() <= 4 and now.hour >= MORNING_HOUR:
+        print("🔄 ตรวจพบว่า bot restart หลัง 08:00 — ส่ง briefing ที่พลาดไปทันที")
+        try:
+            await _run_morning_briefing_once(now)
+        except Exception as e:
+            print(f"❌ catch-up briefing error: {e}")
+
+
+async def _run_morning_briefing_once(now: datetime):
+    """ฟังก์ชันแยกสำหรับ catch-up — เรียก logic เดียวกับ morning_briefing"""
+    guild = discord.utils.get(bot.guilds)
+    if not guild: return
+    channel = discord.utils.get(guild.text_channels, name=MORNING_CHANNEL_NAME)
+    if not channel:
+        channel = discord.utils.get(guild.text_channels, name=ALERT_CHANNEL_NAME)
+    if not channel: return
+
+    all_events = await fetch_calendar()
+    today  = now.date()
+    events = sorted(
+        [e for e in all_events if parse_event_time(e) and parse_event_time(e).date() == today],
+        key=lambda e: parse_event_time(e) or datetime.min.replace(tzinfo=TZ_THAI)
+    )
+    high_count = sum(1 for e in events if e.get("impact") == "High")
+    med_count  = sum(1 for e in events if e.get("impact") == "Medium")
+    embed = build_event_embed(
+        events, f"☀️ สรุปข่าววันนี้ — {now.strftime('%A %d/%m/%Y')} (catch-up)",
+        discord.Color.gold()
+    )
+    embed.set_footer(text=f"🔴 High: {high_count}  🟡 Medium: {med_count}  |  XAU Calendar Bot")
+    await channel.send("📢 **สรุปข่าวประจำวัน** _(ส่งย้อนหลังเนื่องจาก bot เพิ่ง restart)_", embed=embed)
+
+    high_med = [e for e in events if e.get("impact") in ["High", "Medium"]]
+    if high_med:
+        summary = "\n".join(
+            f"- {e.get('title')} ({e.get('impact')}) "
+            f"คาดการณ์:{e.get('forecast','—')} ก่อนหน้า:{e.get('previous','—')}"
+            for e in high_med
+        )
+        result = await ai_analyze(summary)
+        ai_embed = discord.Embed(
+            title="🤖 AI วิเคราะห์ XAUUSD ประจำวัน",
+            description=result, color=discord.Color.purple(), timestamp=now
+        )
+        ai_embed.set_footer(text="XAU Calendar Bot • powered by Claude AI")
+        await channel.send(embed=ai_embed)
+    else:
+        await channel.send("✅ วันนี้ไม่มีข่าว High/Medium Impact ครับ — เทรดได้สบายใจ!")
+    print(f"✅ catch-up briefing ส่งแล้ว: {now.strftime('%d/%m/%Y %H:%M')}")
 
 
 bot.run(BOT_TOKEN)
