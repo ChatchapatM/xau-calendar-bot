@@ -16,13 +16,24 @@ ALERT_CHANNEL_NAME   = "trading-alerts"   # ← auto alert 30 นาทีก่
 MORNING_CHANNEL_NAME = "ccpro-ai-news"    # ← morning briefing 08:00
 PAIRS_FOCUS          = ["XAUUSD", "USD", "US"]
 TZ_THAI              = pytz.timezone("Asia/Bangkok")
-MORNING_HOUR         = 8   # 08:00 UTC+7
+MORNING_HOUR         = 13  # ← เปลี่ยนเป็น 8 หลังทดสอบ
+MORNING_MINUTE       = 45  # ← เปลี่ยนเป็น 0 หลังทดสอบ
 # ============================================================
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
+
+# ============================================================
+#  CHANNEL FINDER — รองรับ emoji นำหน้าชื่อช่อง
+# ============================================================
+def find_channel(guild: discord.Guild, name: str) -> discord.TextChannel | None:
+    for ch in guild.text_channels:
+        if ch.name == name: return ch
+    for ch in guild.text_channels:
+        if ch.name.endswith(name): return ch
+    return None
 
 # ---- ดึงข่าวจาก ForexFactory ----
 async def fetch_calendar():
@@ -228,7 +239,7 @@ async def auto_alert():
     try:
         guild = discord.utils.get(bot.guilds)
         if not guild: return
-        channel = discord.utils.get(guild.text_channels, name=ALERT_CHANNEL_NAME)
+        channel = find_channel(guild, ALERT_CHANNEL_NAME)
         if not channel:
             print(f"⚠️ auto_alert: ไม่เจอช่อง #{ALERT_CHANNEL_NAME} (ข้ามรอบนี้)")
             return
@@ -266,14 +277,14 @@ async def auto_alert():
 async def morning_briefing():
     now = datetime.now(TZ_THAI)
     if now.weekday() > 4: return                          # เสาร์-อาทิตย์ข้าม
-    if now.hour != MORNING_HOUR or now.minute != 0: return
+    if now.hour != MORNING_HOUR or now.minute != MORNING_MINUTE: return
 
     try:
         guild = discord.utils.get(bot.guilds)
         if not guild: return
-        channel = discord.utils.get(guild.text_channels, name=MORNING_CHANNEL_NAME)
+        channel = find_channel(guild, MORNING_CHANNEL_NAME)
         if not channel:
-            channel = discord.utils.get(guild.text_channels, name=ALERT_CHANNEL_NAME)
+            channel = find_channel(guild, ALERT_CHANNEL_NAME)
         if not channel:
             print(f"⚠️ morning_briefing: ไม่เจอช่อง #{MORNING_CHANNEL_NAME} หรือ #{ALERT_CHANNEL_NAME}")
             return
@@ -324,7 +335,7 @@ async def morning_briefing():
         print(f"❌ morning_briefing error (ไม่กระทบ task อื่น): {e}")
         try:
             guild = discord.utils.get(bot.guilds)
-            channel = discord.utils.get(guild.text_channels, name=MORNING_CHANNEL_NAME) if guild else None
+            channel = find_channel(guild, MORNING_CHANNEL_NAME) if guild else None
             if channel:
                 await channel.send(f"⚠️ Morning briefing เกิดข้อผิดพลาด: {e}")
         except Exception:
@@ -343,12 +354,12 @@ async def on_ready():
     morning_briefing.start()
 
     now   = datetime.now(TZ_THAI)
-    next8 = now.replace(hour=MORNING_HOUR, minute=0, second=0, microsecond=0)
+    next8 = now.replace(hour=MORNING_HOUR, minute=MORNING_MINUTE, second=0, microsecond=0)
     if now >= next8: next8 += timedelta(days=1)
     print(f"🌅 Morning briefing → #{MORNING_CHANNEL_NAME} ใน {round((next8-now).total_seconds()/3600,1)} ชม.")
 
     # ── Catch-up: ถ้า bot restart หลัง 08:00 ของวันนี้ (วันธรรมดา) และยังไม่ได้ส่ง ──
-    if now.weekday() <= 4 and now.hour >= MORNING_HOUR:
+    if now.weekday() <= 4 and now.hour == MORNING_HOUR and now.minute >= MORNING_MINUTE:
         print("🔄 ตรวจพบว่า bot restart หลัง 08:00 — ส่ง briefing ที่พลาดไปทันที")
         try:
             await _run_morning_briefing_once(now)
@@ -360,9 +371,9 @@ async def _run_morning_briefing_once(now: datetime):
     """ฟังก์ชันแยกสำหรับ catch-up — เรียก logic เดียวกับ morning_briefing"""
     guild = discord.utils.get(bot.guilds)
     if not guild: return
-    channel = discord.utils.get(guild.text_channels, name=MORNING_CHANNEL_NAME)
+    channel = find_channel(guild, MORNING_CHANNEL_NAME)
     if not channel:
-        channel = discord.utils.get(guild.text_channels, name=ALERT_CHANNEL_NAME)
+        channel = find_channel(guild, ALERT_CHANNEL_NAME)
     if not channel: return
 
     all_events = await fetch_calendar()
