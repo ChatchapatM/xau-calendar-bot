@@ -16,8 +16,8 @@ ALERT_CHANNEL_NAME   = "trading-alerts"   # ← auto alert 30 นาทีก่
 MORNING_CHANNEL_NAME = "ccpro-ai-news"    # ← morning briefing 08:00
 PAIRS_FOCUS          = ["XAUUSD", "USD", "US"]
 TZ_THAI              = pytz.timezone("Asia/Bangkok")
-MORNING_HOUR         = 13  # ← เปลี่ยนเป็น 8 หลังทดสอบ
-MORNING_MINUTE       = 45  # ← เปลี่ยนเป็น 0 หลังทดสอบ
+MORNING_HOUR         = 8  # 08:00 UTC+7
+MORNING_MINUTE       = 0
 # ============================================================
 
 intents = discord.Intents.default()
