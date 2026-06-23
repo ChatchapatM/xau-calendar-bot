@@ -13,7 +13,7 @@ import os
 BOT_TOKEN            = os.environ["BOT_TOKEN"]
 ANTHROPIC_API_KEY    = os.environ.get("ANTHROPIC_API_KEY", "")
 ALERT_CHANNEL_NAME   = "trading-alerts"   # ← auto alert 30 นาทีก่อนข่าว
-MORNING_CHANNEL_NAME = "ccpro-ai-news"    # ← morning briefing 08:00
+MORNING_CHANNEL_NAME = "cordaxa-ai-news"  # ← morning briefing 08:00
 PAIRS_FOCUS          = ["XAUUSD", "USD", "US"]
 TZ_THAI              = pytz.timezone("Asia/Bangkok")
 MORNING_HOUR         = 8  # 08:00 UTC+7
@@ -271,7 +271,7 @@ async def auto_alert():
 
 
 # ======================================================
-#  MORNING BRIEFING — 08:00 UTC+7 จ-ศ → ccpro-ai-news
+#  MORNING BRIEFING — 08:00 UTC+7 จ-ศ → cordaxa-ai-news
 # ======================================================
 @tasks.loop(minutes=1)
 async def morning_briefing():
